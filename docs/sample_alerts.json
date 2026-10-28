@@ -1,0 +1,38 @@
+{
+    "count": 3,
+    "alerts": [
+        {
+            "id": 3,
+            "timestamp": 1761650000,
+            "src_ip": "192.168.56.101",
+            "dst_ip": "192.168.56.102",
+            "duration": 0.0,
+            "protocol_type": "tcp",
+            "service": "other",
+            "flag": "S0",
+            "predicted_label": "ATTACK"
+        },
+        {
+            "id": 2,
+            "timestamp": 1761649990,
+            "src_ip": "192.168.56.101",
+            "dst_ip": "192.168.56.102",
+            "duration": 0.0,
+            "protocol_type": "tcp",
+            "service": "ssh",
+            "flag": "REJ",
+            "predicted_label": "ATTACK"
+        },
+        {
+            "id": 1,
+            "timestamp": 1761649950,
+            "src_ip": "192.168.56.102",
+            "dst_ip": "192.168.56.1",
+            "duration": 1.4,
+            "protocol_type": "tcp",
+            "service": "http",
+            "flag": "SF",
+            "predicted_label": "NORMAL"
+        }
+    ]
+}
