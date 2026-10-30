@@ -135,3 +135,16 @@ Response 200: {"status": "ok"}
 | GET /users | no (401) | no (403) | yes |
 | PATCH /users/{id}/role | no (401) | no (403) | yes |
 | POST /admin/sync | no (401) | no (403) | yes |
+
+## Severity triage rule
+
+The NIDS model is binary (ATTACK or NORMAL) and produces no severity. The dashboard assigns severity with a fixed, documented rule when alerts are synced. It is a triage heuristic, not a model output.
+
+1. **Base level from the targeted service:**
+   - `ssh`, `telnet`: high (remote access)
+   - `ftp`, `smtp`, `pop_3`, `imap4`, `http`, `http_443`: medium (data and mail services)
+   - everything else, including unnamed ports (`other`): low
+2. **Burst bump:** if the same `src_ip` produced 100 or more alerts within 60 seconds, raise the level by one step (low to medium, medium to high, high to critical).
+3. **NORMAL alerts** (`predicted_label` = NORMAL) are always `low`.
+
+Limitation: the rule was designed against data from a single Nmap SYN scan, so it has not been validated against other attack types or normal traffic.
