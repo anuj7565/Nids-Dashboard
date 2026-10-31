@@ -17,3 +17,11 @@ class Alert(BaseModel):
     predicted_label: Literal["ATTACK", "NORMAL"]
     severity: Literal["low", "medium", "high", "critical"]
     status: Literal["new", "acknowledged"] = "new"
+
+    
+
+class AlertPage(BaseModel):
+    items: list[Alert]
+    total: int
+    page: int
+    page_size: int

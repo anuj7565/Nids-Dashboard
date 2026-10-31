@@ -6,6 +6,7 @@ class Settings(BaseSettings):
 
     alert_source: str = "seed"
     nids_api_url: str = "http://127.0.0.1:8000"
+    seed_file: str = "../docs/sample_alerts.json"
 
 
 settings = Settings()
