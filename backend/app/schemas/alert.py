@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import Field, BaseModel
 
 
 class Alert(BaseModel):
@@ -25,3 +25,6 @@ class AlertPage(BaseModel):
     total: int
     page: int
     page_size: int
+
+class AcknowledgeRequest(BaseModel):
+    note: str | None = Field(default=None, max_length=500)
