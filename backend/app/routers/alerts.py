@@ -9,9 +9,17 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.alert import Alert as AlertRow
 from app.schemas.alert import Alert, AlertPage
+from app.core.deps import get_current_user
 
-router = APIRouter(prefix="/alerts", tags=["alerts"])
+from app.models.acknowledgement import Acknowledgement
+from app.models.user import User
+from app.schemas.alert import AcknowledgeRequest
 
+router = APIRouter(
+    prefix="/alerts",
+    tags=["alerts"],
+    dependencies=[Depends(get_current_user)],
+)
 
 def as_utc(value: datetime) -> datetime:
     return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
@@ -60,7 +68,7 @@ def list_alerts(
         page=page,
         page_size=page_size,
     )
-@router.get("/{alert_id}", response_model=Alert)
+
 
 @router.get("/stats")
 def alert_stats(db: Session = Depends(get_db)):
@@ -83,7 +91,7 @@ def alert_stats(db: Session = Depends(get_db)):
         "by_status": {s: by_status.get(s, 0) for s in ["new", "acknowledged"]},
     }
 
-    
+@router.get("/{alert_id}", response_model=Alert)    
 def get_alert(alert_id: int, db: Session = Depends(get_db)):
     row = db.get(AlertRow, alert_id)
     if row is None:
@@ -91,4 +99,29 @@ def get_alert(alert_id: int, db: Session = Depends(get_db)):
             status_code=404,
             content={"error": {"code": "NOT_FOUND", "message": f"Alert {alert_id} not found"}},
         )
+    return Alert.model_validate(row, from_attributes=True)
+
+@router.post("/{alert_id}/acknowledge", response_model=Alert)
+def acknowledge_alert(
+    alert_id: int,
+    payload: AcknowledgeRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    row = db.get(AlertRow, alert_id)
+    if row is None:
+        return JSONResponse(
+            status_code=404,
+            content={"error": {"code": "NOT_FOUND", "message": f"Alert {alert_id} not found"}},
+        )
+    if row.status == "acknowledged":
+        return JSONResponse(
+            status_code=409,
+            content={"error": {"code": "ALREADY_ACKNOWLEDGED", "message": f"Alert {alert_id} is already acknowledged"}},
+        )
+
+    row.status = "acknowledged"
+    db.add(Acknowledgement(alert_id=row.id, user_id=current_user.id, note=payload.note))
+    db.commit()
+    db.refresh(row)
     return Alert.model_validate(row, from_attributes=True)
