@@ -90,7 +90,14 @@ def alert_stats(db: Session = Depends(get_db)):
         "by_severity": {s: by_severity.get(s, 0) for s in ["low", "medium", "high", "critical"]},
         "by_status": {s: by_status.get(s, 0) for s in ["new", "acknowledged"]},
     }
-
+@router.get("/over-time")
+def alerts_over_time(db: Session = Depends(get_db)):
+    day = func.date(func.timezone("UTC", AlertRow.timestamp))
+    rows = db.execute(
+        select(day, func.count()).group_by(day).order_by(day)
+    ).all()
+    return [{"date": str(d), "count": c} for d, c in rows]
+    
 @router.get("/{alert_id}", response_model=Alert)    
 def get_alert(alert_id: int, db: Session = Depends(get_db)):
     row = db.get(AlertRow, alert_id)

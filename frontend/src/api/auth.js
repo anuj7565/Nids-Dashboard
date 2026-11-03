@@ -5,3 +5,7 @@ export async function login(email, password) {
     const data = await apiFetch("/auth/login", { method: "POST", body })
     return data.access_token
 }
+
+export async function getMe() {
+    return apiFetch("/auth/me")
+}
