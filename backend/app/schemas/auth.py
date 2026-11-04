@@ -1,6 +1,7 @@
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class UserCreate(BaseModel):

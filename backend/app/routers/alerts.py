@@ -1,19 +1,17 @@
-from fastapi.responses import JSONResponse
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.db.session import get_db
-from app.models.alert import Alert as AlertRow
-from app.schemas.alert import Alert, AlertPage
 from app.core.deps import get_current_user
-
+from app.db.session import get_db
 from app.models.acknowledgement import Acknowledgement
+from app.models.alert import Alert as AlertRow
 from app.models.user import User
-from app.schemas.alert import AcknowledgeRequest
+from app.schemas.alert import AcknowledgeRequest, Alert, AlertPage
 
 router = APIRouter(
     prefix="/alerts",
@@ -22,7 +20,7 @@ router = APIRouter(
 )
 
 def as_utc(value: datetime) -> datetime:
-    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
 
 
 @router.get("", response_model=AlertPage)
@@ -102,10 +100,8 @@ def alerts_over_time(db: Session = Depends(get_db)):
 def get_alert(alert_id: int, db: Session = Depends(get_db)):
     row = db.get(AlertRow, alert_id)
     if row is None:
-        return JSONResponse(
-            status_code=404,
-            content={"error": {"code": "NOT_FOUND", "message": f"Alert {alert_id} not found"}},
-        )
+        raise HTTPException(status_code=404, detail=f"Alert {alert_id} not found")
+
     return Alert.model_validate(row, from_attributes=True)
 
 @router.post("/{alert_id}/acknowledge", response_model=Alert)
@@ -117,18 +113,14 @@ def acknowledge_alert(
 ):
     row = db.get(AlertRow, alert_id)
     if row is None:
-        return JSONResponse(
-            status_code=404,
-            content={"error": {"code": "NOT_FOUND", "message": f"Alert {alert_id} not found"}},
-        )
+        raise HTTPException(status_code=404, detail=f"Alert {alert_id} not found")
     if row.status == "acknowledged":
-        return JSONResponse(
-            status_code=409,
-            content={"error": {"code": "ALREADY_ACKNOWLEDGED", "message": f"Alert {alert_id} is already acknowledged"}},
-        )
+        raise HTTPException(status_code=409, detail=f"Alert {alert_id} is already acknowledged")
 
     row.status = "acknowledged"
     db.add(Acknowledgement(alert_id=row.id, user_id=current_user.id, note=payload.note))
     db.commit()
     db.refresh(row)
     return Alert.model_validate(row, from_attributes=True)
+
+

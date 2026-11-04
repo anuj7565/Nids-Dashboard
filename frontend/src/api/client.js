@@ -8,11 +8,14 @@ export class ApiError extends Error {
     }
 }
 
+let unauthorizedHandler = null;
+
+export function setUnauthorizedHandler(fn) {
+    unauthorizedHandler = fn;
+}
+
 function extractMessage(body, status) {
-    if (body?.error?.message) return body.error.message;
-    if (typeof body?.detail === "string") return body.detail;
-    if (Array.isArray(body?.detail)) return "Invalid input";
-    return `Request failed: ${status}`;
+    return body?.error?.message ?? `Request failed: ${status}`;
 }
 
 export async function apiFetch(path, options = {}) {
@@ -20,7 +23,12 @@ export async function apiFetch(path, options = {}) {
     const headers = { ...options.headers };
     if (token) headers.Authorization = `Bearer ${token}`;
 
-    const response = await fetch(`${API_URL}${path}`, { ...options, headers });
+    let response;
+    try {
+        response = await fetch(`${API_URL}${path}`, { ...options, headers });
+    } catch {
+        throw new ApiError(0, "Cannot reach the server. Check your connection.");
+    }
 
     if (!response.ok) {
         let body = null;
@@ -28,6 +36,9 @@ export async function apiFetch(path, options = {}) {
             body = await response.json();
         } catch {
             // error response had no JSON body
+        }
+        if (response.status === 401 && token && path !== "/auth/login") {
+            unauthorizedHandler?.();
         }
         throw new ApiError(response.status, extractMessage(body, response.status));
     }
