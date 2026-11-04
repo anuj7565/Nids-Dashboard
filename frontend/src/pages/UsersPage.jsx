@@ -8,62 +8,71 @@ function UsersPage() {
     const [error, setError] = useState("")
     const [roleError, setRoleError] = useState("")
     const [reloadKey, setReloadKey] = useState(0)
+    const [saving, setSaving] = useState(false)
 
     useEffect(() => {
+        /* eslint-disable react-hooks/set-state-in-effect -- standard fetch-on-change pattern */
         setLoading(true)
         setError("")
+        /* eslint-enable react-hooks/set-state-in-effect */
         getUsers()
             .then(setUsers)
-            .catch(() => setError("Could not load users."))
+            .catch((err) => setError(err.message))
             .finally(() => setLoading(false))
     }, [reloadKey])
 
     async function changeRole(id, role) {
         setRoleError("")
+        setSaving(true)
         try {
             await updateUserRole(id, role)
         } catch (err) {
             setRoleError(err.message)
+        } finally {
+            setSaving(false)
         }
         setReloadKey((k) => k + 1)
     }
 
     return (
-        <div>
+        <div className="page">
             <Link to="/alerts">Back to alerts</Link>
             <h1>Users</h1>
             {loading && <p>Loading...</p>}
-            {error && <p>{error}</p>}
-            {roleError && <p>{roleError}</p>}
+            {error && <p className="error" role="alert">{error}</p>}
+            {roleError && <p className="error" role="alert">{roleError}</p>}
             {users && (
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Email</th>
-                            <th>Username</th>
-                            <th>Role</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {users.map((u) => (
-                            <tr key={u.id}>
-                                <td>{u.id}</td>
-                                <td>{u.email}</td>
-                                <td>{u.username}</td>
-                                <td>
-                                    <select
-                                        value={u.role}
-                                        onChange={(e) => changeRole(u.id, e.target.value)}
-                                    >
-                                        <option value="analyst">analyst</option>
-                                        <option value="admin">admin</option>
-                                    </select>
-                                </td>
+                <div className="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Email</th>
+                                <th>Username</th>
+                                <th>Role</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            {users.map((u) => (
+                                <tr key={u.id}>
+                                    <td>{u.id}</td>
+                                    <td>{u.email}</td>
+                                    <td>{u.username}</td>
+                                    <td>
+                                        <select
+                                            value={u.role}
+                                            disabled={saving}
+                                            onChange={(e) => changeRole(u.id, e.target.value)}
+                                        >
+                                            <option value="analyst">analyst</option>
+                                            <option value="admin">admin</option>
+                                        </select>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             )}
         </div>
     )

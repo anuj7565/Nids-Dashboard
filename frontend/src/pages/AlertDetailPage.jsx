@@ -9,24 +9,25 @@ function AlertDetailPage() {
     const [error, setError] = useState("")
 
     useEffect(() => {
+        /* eslint-disable react-hooks/set-state-in-effect -- standard fetch-on-change pattern */
         setLoading(true)
         setError("")
+        setAlert(null)
+        /* eslint-enable react-hooks/set-state-in-effect */
         getAlert(id)
             .then(setAlert)
-            .catch((err) => {
-                setError(err.status === 404 ? "Alert not found." : "Could not load alert.")
-            })
+            .catch((err) => setError(err.status === 404 ? "Alert not found." : err.message))
             .finally(() => setLoading(false))
     }, [id])
 
     return (
-        <div>
+        <div className="page">
             <Link to="/alerts">Back to alerts</Link>
             <h1>Alert {id}</h1>
             {loading && <p>Loading...</p>}
-            {error && <p>{error}</p>}
+            {error && <p className="error">{error}</p>}
             {alert && (
-                <dl>
+                <dl className="details">
                     <dt>External ID</dt>
                     <dd>{alert.external_id}</dd>
                     <dt>Time</dt>

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.schemas.alert import Alert
 from app.services.severity import assign_severities
@@ -17,7 +17,7 @@ def rows_to_alerts(rows: list[dict]) -> list[Alert]:
         alerts.append(
             Alert(
                 external_id=f"{run_label}-{row['id']}",
-                timestamp=datetime.fromtimestamp(row["timestamp"], tz=timezone.utc),
+                timestamp=datetime.fromtimestamp(row["timestamp"], tz=UTC),
                 src_ip=row["src_ip"],
                 dst_ip=row["dst_ip"],
                 duration=row["duration"],
