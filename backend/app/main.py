@@ -1,6 +1,3 @@
-import logging
-import time
-
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,23 +11,6 @@ from app.routers import admin, alerts, auth, users
 
 app = FastAPI(title="NIDS Dashboard API")
 app.state.limiter = limiter
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-logger = logging.getLogger("app.request")
-
-
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    start = time.perf_counter()
-    try:
-        response = await call_next(request)
-    except Exception:
-        ms = (time.perf_counter() - start) * 1000
-        logger.exception("%s %s -> 500 (%.0f ms)", request.method, request.url.path, ms)
-        raise
-    ms = (time.perf_counter() - start) * 1000
-    logger.info("%s %s -> %s (%.0f ms)", request.method, request.url.path, response.status_code, ms)
-    return response
 
 app.add_middleware(
     CORSMiddleware,
