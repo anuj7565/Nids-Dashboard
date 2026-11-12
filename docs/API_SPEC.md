@@ -1,16 +1,20 @@
 # nids-dashboard API Specification
 
-Status: draft, written before implementation.
+Status: matches the implemented API as of 9 Nov 2026.
 
 ## Conventions
 
-- **Format:** all requests and responses are JSON.
+- **Format:** requests and responses are JSON, except `POST /auth/login`, which is form-encoded.
 - **Auth:** protected routes need the header `Authorization: Bearer <JWT>`.
 - **Timestamps:** ISO 8601 in UTC, e.g. `2026-10-27T14:03:22Z`. The NIDS API returns Unix seconds; the sync service converts them.
-- **Pagination:** list endpoints take `page` (default 1) and `page_size` (default 20, max 100), and return:
+- **Pagination:** `GET /alerts` takes `page` (default 1) and `page_size` (default 20, max 100), and returns:
   `{"items": [...], "total": 1542, "page": 1, "page_size": 20}`
-- **Errors:** every error response has this shape:
-  `{"error": {"code": "ALERT_NOT_FOUND", "message": "Alert 42 does not exist"}}`
+- **Errors:** every error has this shape. `details` appears only on 422.
+  {"error": {"code": "NOT_FOUND", "message": "Alert 42 not found"}}
+  The code comes from the HTTP status:
+  400 BAD_REQUEST, 401 UNAUTHORIZED, 403 FORBIDDEN, 404 NOT_FOUND, 405 METHOD_NOT_ALLOWED, 409 CONFLICT, 422 VALIDATION_ERROR, 429 RATE_LIMITED.
+  422 adds {"details": [{"field": "body.email", "message": "..."}]}.
+  Not yet implemented: a catch-all handler for unhandled exceptions (INTERNAL_ERROR). Today those return the framework's default 500.
 - **Status codes:** 200 OK, 201 Created, 400 bad input, 401 missing or invalid token, 403 valid token but wrong role, 404 not found, 409 conflict, 422 validation failed, 429 rate limited.
 
 ## Roles
@@ -25,29 +29,30 @@ Status: draft, written before implementation.
 Public. Creates an analyst account.
 
 Request:
-{"email": "a@example.com", "username": "anuj", "password": "min 8 chars"}
+{"email": "a@example.com", "username": "3-50 chars", "password": "8-128 chars"}
 
 Response 201:
-{"id": 1, "email": "a@example.com", "username": "anuj", "role": "analyst"}
+{"id": 1, "email": "a@example.com", "username": "anuj", "role": "analyst", "created_at": "2026-10-27T14:03:22Z"}
 
-Errors: 409 `EMAIL_TAKEN` or `USERNAME_TAKEN`, 422 invalid input (bad email, short password).
+Errors: 409 CONFLICT ("Email or username already registered", one message for both), 422 invalid input.
 
 ### POST /auth/login
-Public. Rate limited (429 `RATE_LIMITED` after repeated attempts).
+Public. Rate limited to 5 requests per minute per client IP.
 
-Request:
-{"email": "a@example.com", "password": "..."}
+Request: form-encoded (`Content-Type: application/x-www-form-urlencoded`)
+username=a@example.com&password=...
+(The field is called `username` because of the OAuth2 password form; its value is the account email.)
 
 Response 200:
 {"access_token": "<JWT>", "token_type": "bearer"}
 
-Errors: 401 `INVALID_CREDENTIALS` (same message whether the email or the password was wrong), 429.
+Errors: 401 UNAUTHORIZED ("Incorrect email or password", identical whether the email or the password was wrong), 422 missing fields, 429 RATE_LIMITED.
 
 ### GET /auth/me
 Any logged-in user.
 
 Response 200:
-{"id": 1, "email": "a@example.com", "username": "anuj", "role": "analyst"}
+{"id": 1, "email": "a@example.com", "username": "anuj", "role": "analyst", "created_at": "2026-10-27T14:03:22Z"}
 
 Errors: 401 missing, expired or invalid token.
 
@@ -58,61 +63,86 @@ All alert routes require login (analyst or admin).
 Alert object:
 {
   "id": 17,
-  "external_id": "1204",
-  "timestamp": "2026-10-27T14:03:22Z",
-  "src_ip": "192.168.201.128",
+  "external_id": "1792680431-1420",
+  "timestamp": "2026-10-29T14:25:55Z",
+  "src_ip": "203.0.113.20",
   "dst_ip": "192.168.201.129",
-  "duration": 0,
+  "duration": 0.004552,
   "protocol_type": "tcp",
-  "service": "private",
-  "flag": "S0",
+  "service": "telnet",
+  "flag": "REJ",
   "predicted_label": "ATTACK",
   "severity": "high",
   "status": "new"
 }
 
+`external_id` has the form `<run label>-<id>` and is unique. It is the key the sync upserts on.
+
 ### GET /alerts
-Query params (all optional): `severity` (low|medium|high|critical), `status` (new|acknowledged), `from` and `to` (ISO 8601 dates), `q` (matches src_ip or dst_ip), `page`, `page_size`.
+Query params (all optional):
+- `severity` (low|medium|high|critical)
+- `status` (new|acknowledged)
+- `q` (substring match on src_ip or dst_ip)
+- `from` and `to` (ISO 8601 datetimes; a value with no timezone is treated as UTC; both ends inclusive)
+- `page`, `page_size` (see Conventions)
+
 Sorted newest first.
 
 Response 200: paginated list (see Conventions) of alert objects.
-Errors: 401, 422 (e.g. unknown severity value).
+Errors: 401, 422 (e.g. unknown severity value, page_size above 100).
 
 ### GET /alerts/{id}
-Response 200: the alert object plus `"raw": {...}` (the original NIDS record) and `"acknowledgements": [{"user": "anuj", "note": "...", "created_at": "..."}]`.
-Errors: 401, 404 `ALERT_NOT_FOUND`.
+Response 200: the alert object (same fields as in the list). The original record and acknowledgement history are stored in the database but not exposed by the API yet.
+Errors: 401, 404 NOT_FOUND, 422 (id is not an integer).
 
 ### POST /alerts/{id}/acknowledge
-Request: {"note": "Confirmed Nmap scan from lab Kali VM"}  (note is optional)
+Request: {"note": "..."} (note is optional, max 500 characters; longer gives 422)
 Response 200: the updated alert object with `"status": "acknowledged"`.
-Errors: 401, 404 `ALERT_NOT_FOUND`, 409 `ALREADY_ACKNOWLEDGED`.
+Errors: 401, 404 NOT_FOUND, 409 CONFLICT (already acknowledged), 422.
 
 ### GET /alerts/stats
 Response 200:
 {
   "total": 1542,
   "by_severity": {"low": 300, "medium": 700, "high": 450, "critical": 92},
-  "by_status": {"new": 1500, "acknowledged": 42},
-  "per_day": [{"date": "2026-10-27", "count": 1542}]
+  "by_status": {"new": 1500, "acknowledged": 42}
 }
+Errors: 401.
+
+### GET /alerts/over-time
+Alert counts per UTC calendar day, oldest first. No parameters. Days with no alerts are omitted.
+
+Response 200:
+[{"date": "2026-10-27", "count": 1542}]
+
+Note: days are grouped in UTC, so the chart's day boundaries differ from IST by 5.5 hours.
+Declared before /alerts/{id} so "over-time" is not parsed as an id.
+Errors: 401.
 
 ## Admin
 
-All admin routes require the `admin` role. An analyst gets 403 `FORBIDDEN`.
+All admin routes require the `admin` role. An analyst gets 403 FORBIDDEN.
 
 ### GET /users
-Response 200: paginated list of {"id", "email", "username", "role", "created_at"}.
+Response 200: a JSON array of user objects (`id`, `email`, `username`, `role`, `created_at`), ordered by id (not paginated).
 Errors: 401, 403.
 
 ### PATCH /users/{id}/role
 Request: {"role": "admin"}  (allowed values: analyst, admin)
-Response 200: the updated user.
-Errors: 401, 403, 404 `USER_NOT_FOUND`, 422 invalid role, 409 `LAST_ADMIN` (cannot demote the only remaining admin).
+Response 200: the updated user object.
+
+Rules:
+- An admin cannot change their own role (400 BAD_REQUEST). So a demotion always needs a second admin, and the acting admin can never remove their own access.
+
+Errors: 401, 403, 400 (own role), 404 NOT_FOUND ("User not found"), 422 invalid role.
 
 ### POST /admin/sync
-Pulls alerts from the configured alert source and upserts them by `external_id`. Running it twice never creates duplicates.
-Response 200: {"fetched": 1542, "inserted": 1500, "updated": 42}
-Errors: 401, 403, 502 `SOURCE_UNAVAILABLE` (the NIDS API could not be reached).
+Pulls alerts from the configured alert source (`ALERT_SOURCE`: the real NIDS API or the simulated seed file) and upserts them into the database by `external_id`. Running it twice never creates duplicates: existing rows are updated, new rows are inserted. Duplicate `external_id` values within one fetch are collapsed to one.
+
+Response 200: {"status": "ok", "result": 1542}
+(`result` is the number of unique alerts upserted. It does not split inserted from updated.)
+
+Errors: 401, 403. If the alert source is unreachable the request currently fails with an unhandled 500; a clean 502 is not implemented yet.
 
 ## Health
 
@@ -131,6 +161,7 @@ Response 200: {"status": "ok"}
 | GET /alerts | no (401) | yes | yes |
 | GET /alerts/{id} | no (401) | yes | yes |
 | GET /alerts/stats | no (401) | yes | yes |
+| GET /alerts/over-time | no (401) | yes | yes |
 | POST /alerts/{id}/acknowledge | no (401) | yes | yes |
 | GET /users | no (401) | no (403) | yes |
 | PATCH /users/{id}/role | no (401) | no (403) | yes |
