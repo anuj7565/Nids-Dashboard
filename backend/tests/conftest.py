@@ -22,7 +22,7 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.main import app
-from app.models import acknowledgement, alert, user  # noqa: F401
+from app.models import acknowledgement, alert, sensor, user  # noqa: F401
 from app.models.user import User
 
 PASSWORD = "Passw0rd!test"

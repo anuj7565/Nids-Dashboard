@@ -144,6 +144,31 @@ Response 200: {"status": "ok", "result": 1542}
 
 Errors: 401, 403. If the alert source is unreachable the request currently fails with an unhandled 500; a clean 502 is not implemented yet.
 
+
+### POST /admin/sensors
+Registers a new sensor and returns its key. The key is random (`nids_` plus 43 URL-safe characters) and is shown only in this response. The database stores a SHA-256 hash and a 12-character prefix, never the key itself, so a lost key cannot be recovered; revoke the sensor and create a new one.
+
+Request body: {"name": "kali-test"} (1-64 characters)
+
+Response 201: {"id": 1, "name": "kali-test", "key_prefix": "nids_Ab3dE9x", "created_at": "...", "revoked_at": null, "last_seen_at": null, "key": "nids_..."}
+
+Errors: 401, 403, 422.
+
+### GET /admin/sensors
+Lists all sensors, including revoked ones, ordered by id. The response is an unpaginated array. It never contains the key or its hash; `key_prefix` is there so an admin can tell sensors apart.
+
+Response 200: [{"id": 1, "name": "kali-test", "key_prefix": "nids_Ab3dE9x", "created_at": "...", "revoked_at": null, "last_seen_at": null}]
+(`last_seen_at` stays null until `POST /ingest` exists.)
+
+Errors: 401, 403.
+
+### POST /admin/sensors/{sensor_id}/revoke
+Revokes a sensor by setting `revoked_at`. The row is kept for history. Revoking an already revoked sensor returns 409, the same pattern as acknowledge.
+
+Response 200: the sensor object (same fields as the list).
+
+Errors: 401, 403, 404 (unknown id), 409 (already revoked).
+
 ## Health
 
 ### GET /health
@@ -166,6 +191,9 @@ Response 200: {"status": "ok"}
 | GET /users | no (401) | no (403) | yes |
 | PATCH /users/{id}/role | no (401) | no (403) | yes |
 | POST /admin/sync | no (401) | no (403) | yes |
+| POST /admin/sensors | no (401) | no (403) | yes |
+| GET /admin/sensors | no (401) | no (403) | yes |
+| POST /admin/sensors/{id}/revoke | no (401) | no (403) | yes |
 
 ## Severity triage rule
 
